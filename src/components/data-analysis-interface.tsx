@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,11 +13,13 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { uploadFile, sendChatMessage } from "@/services/api";
 import { DataVisualization, parseChartDataFromResponse, ChartData } from "./data-visualization";
+import ReactMarkdown from 'react-markdown';
 
 // Define interfaces for TypeScript
 interface Message {
   role: "user" | "assistant";
   content: string;
+  formattedContent?: string; // Optional formatted content with charts removed
   timestamp: string;
   charts?: ChartData[];
 }
@@ -43,6 +45,16 @@ export function DataAnalysisInterface() {
   const [isSending, setIsSending] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [visualizationCharts, setVisualizationCharts] = useState<ChartData[]>([]);
+
+  // Reference for the messages container
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Function to scroll to the bottom of the messages
+  const scrollToBottom = () => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  };
 
   // Function to handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -76,11 +88,26 @@ export function DataAnalysisInterface() {
       setFileData(data);
       setActiveFileId(data.file_id);
       
-      // Add welcome message from assistant
+      // Add welcome message from assistant with formatting
+      const welcomeMessage = `**File Analysis Complete!**
+
+I've processed your file "**${data.filename}**". 
+
+Here's a summary of your data:
+* **Rows:** ${data.summary.rows}
+* **Columns:** ${data.summary.columns.length}
+
+How can I help you analyze this data? You can ask me to:
+* Generate visualizations
+* Calculate statistics
+* Find trends or patterns
+* Summarize key insights`;
+
       setMessages([
         {
           role: "assistant",
-          content: `I've processed your file "${data.filename}". This dataset has ${data.summary.rows} rows and ${data.summary.columns.length} columns. How can I help you analyze this data?`,
+          content: welcomeMessage,
+          formattedContent: welcomeMessage,
           timestamp: new Date().toISOString()
         }
       ]);
@@ -124,12 +151,16 @@ export function DataAnalysisInterface() {
         setVisualizationCharts(charts);
       }
       
-      // Add assistant response with any chart data
+      // Format the response to remove chart JSON and enhance readability
+      const formattedContent = formatAIResponse(data.analysis);
+      
+      // Add assistant response with any chart data and formatted content
       setMessages(prev => [
         ...prev, 
         {
           role: "assistant",
-          content: data.analysis,
+          content: data.analysis, // Keep original content
+          formattedContent: formattedContent, // Add formatted content
           timestamp: new Date().toISOString(),
           charts: charts.length > 0 ? charts : undefined
         }
@@ -139,12 +170,14 @@ export function DataAnalysisInterface() {
       console.error("Error sending message:", error);
       toast.error("Failed to get a response. Please try again.");
       
-      // Add error message
+      // Add error message with formatting
+      const errorMessage = "**Sorry!** I encountered an error. Please try again.";
       setMessages(prev => [
         ...prev, 
         {
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: errorMessage,
+          formattedContent: errorMessage,
           timestamp: new Date().toISOString()
         }
       ]);
@@ -152,6 +185,26 @@ export function DataAnalysisInterface() {
       setIsSending(false);
     }
   };
+
+  // Function to format AI responses - removing chart code blocks and enhancing formatting
+  const formatAIResponse = (content: string): string => {
+    // Remove chart data blocks
+    const cleanedContent = content.replace(/```chart-data\n[\s\S]*?\n```/g, '');
+    
+    // Remove any empty markdown code blocks that might be left
+    const noEmptyBlocks = cleanedContent.replace(/```\s*```/g, '');
+    
+    // Remove excessive line breaks and cleanup
+    return noEmptyBlocks
+      .replace(/\n{3,}/g, '\n\n') // Replace 3+ consecutive line breaks with 2
+      .replace(/---\s*\n\s*\n/g, '---\n') // Clean up after markdown horizontal rules
+      .trim();
+  };
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -322,7 +375,7 @@ export function DataAnalysisInterface() {
                 </CardDescription>
               </CardHeader>
               
-              <CardContent className="flex-1 overflow-y-auto p-4">
+              <CardContent className="flex-1 overflow-y-auto p-4" ref={messagesContainerRef}>
                 <div className="space-y-4">
                   {messages.map((message, index) => (
                     <div
@@ -344,7 +397,11 @@ export function DataAnalysisInterface() {
                             <span className="text-xs font-medium">AI Assistant</span>
                           </div>
                         )}
-                        <div className="whitespace-pre-wrap">{message.content}</div>
+                        <div className="whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
+                          <ReactMarkdown>
+                            {message.role === "assistant" && message.formattedContent ? message.formattedContent : message.content}
+                          </ReactMarkdown>
+                        </div>
                         <div className="text-xs opacity-70 mt-1 text-right">
                           {new Date(message.timestamp).toLocaleTimeString()}
                         </div>

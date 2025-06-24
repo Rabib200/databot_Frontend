@@ -12,9 +12,11 @@ import {
   Title,
   Tooltip,
   Legend,
-  RadialLinearScale
+  RadialLinearScale,
+  ScatterController,
+  TooltipItem
 } from 'chart.js';
-import { Bar, Pie, Line, Doughnut, PolarArea } from 'react-chartjs-2';
+import { Bar, Pie, Line, Doughnut, PolarArea, Scatter } from 'react-chartjs-2';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -29,7 +31,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  RadialLinearScale
+  RadialLinearScale,
+  ScatterController
 );
 
 export interface DataPoint {
@@ -40,11 +43,11 @@ export interface DataPoint {
 export interface ChartData {
   title: string;
   description: string;
-  type: 'bar' | 'line' | 'pie' | 'doughnut' | 'polarArea';
+  type: 'bar' | 'line' | 'pie' | 'doughnut' | 'polarArea' | 'scatter' | 'heatmap' | 'histogram' | 'boxplot';
   labels: string[];
   datasets: Array<{
     label: string;
-    data: number[];
+    data: number[] | Array<{x: number, y: number}>;
     backgroundColor?: string | string[];
     borderColor?: string | string[];
     borderWidth?: number;
@@ -119,6 +122,43 @@ function SingleChart({ chart }: { chart: ChartData }) {
         return <Doughnut options={options} data={chartData} height={300} />;
       case 'polarArea':
         return <PolarArea options={options} data={chartData} height={300} />;
+      case 'scatter':
+        return <Scatter options={options} data={chartData} height={300} />;
+      case 'histogram':
+        // For histogram, we'll use a bar chart with special configurations
+        const histogramOptions = {
+          ...options,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Frequency' }
+            },
+            x: {
+              title: { display: true, text: 'Value' }
+            }
+          }
+        };
+        return <Bar options={histogramOptions} data={chartData} height={300} />;
+      case 'heatmap':
+        // For heatmap, we'll use a specialized configuration of a bar chart
+        const heatmapOptions = {
+          ...options,
+          plugins: {
+            ...options.plugins,
+            tooltip: {
+              callbacks: {
+                label: function(tooltipItem: TooltipItem<'bar'>) {
+                  return `Value: ${tooltipItem.raw}`;
+                }
+              }
+            }
+          }
+        };
+        return <Bar options={heatmapOptions} data={chartData} height={300} />;
+      case 'boxplot':
+        // For boxplot, use a bar chart with specialized styling
+        return <Bar options={options} data={chartData} height={300} />;
+      //   return <BoxPlot options={options} data={chartData} height={300} />;
       default:
         return <Bar options={options} data={chartData} height={300} />;
     }
