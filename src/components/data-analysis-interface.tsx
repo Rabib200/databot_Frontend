@@ -224,6 +224,12 @@ How can I help you analyze this data? You can ask me to:
       keywords.some(keyword => col.toLowerCase().includes(keyword.toLowerCase()))
     );
   }, []);
+  
+  // Helper to check if a string value could be a number
+  const isNumericString = useCallback((value: unknown): boolean => {
+    if (typeof value !== 'string') return false;
+    return !isNaN(parseFloat(value)) && isFinite(Number(value));
+  }, []);
 
   // Function to generate dynamic suggestions based on file data
   const generateSuggestions = useCallback((data: FileData): string[] => {
@@ -235,12 +241,36 @@ How can I help you analyze this data? You can ask me to:
     const textColumns: string[] = [];
     const locationColumns: string[] = [];
     
+    // Helper to detect if a column contains numeric data by sampling the preview
+    const containsNumericData = (columnName: string): boolean => {
+      if (!data.data_preview || data.data_preview.length === 0) return false;
+      
+      // Check the first few rows to see if the values are numeric strings
+      for (let i = 0; i < Math.min(3, data.data_preview.length); i++) {
+        const row = data.data_preview[i];
+        if (row && columnName in row) {
+          const value = row[columnName];
+          if (typeof value === 'number') return true;
+          if (isNumericString(value)) return true;
+        }
+      }
+      return false;
+    };
+    
+    // First pass: Categorize columns based on types and actual values
     Object.entries(data.summary.data_types).forEach(([column, type]) => {
-      if (type.includes("int") || type.includes("float") || type.includes("number") || type.includes("double")) {
-        numericColumns.push(column);
-      } else if (type.includes("date") || type.includes("time")) {
+      // Check for date columns
+      if (type.includes("date") || type.includes("time") || 
+          column.toLowerCase().includes("date") || column.toLowerCase().includes("time")) {
         dateColumns.push(column);
-      } else {
+      } 
+      // Check for numeric columns - either by type or by analyzing the actual data
+      else if (type.includes("int") || type.includes("float") || type.includes("number") || type.includes("double") || 
+               containsNumericData(column)) {
+        numericColumns.push(column);
+      } 
+      // Everything else is considered text
+      else {
         textColumns.push(column);
       }
 
@@ -249,7 +279,8 @@ How can I help you analyze this data? You can ask me to:
           column.toLowerCase().includes("location") || 
           column.toLowerCase().includes("region") || 
           column.toLowerCase().includes("city") || 
-          column.toLowerCase().includes("country")) {
+          column.toLowerCase().includes("country") ||
+          column.toLowerCase().includes("hub")) {
         locationColumns.push(column);
       }
     });
@@ -279,19 +310,49 @@ How can I help you analyze this data? You can ask me to:
     
     // Look for specific column names
     const revenueColumn = findColumnByKeywords(numericColumns, ["revenue", "sales", "price", "amount", "total"]);
-    const customerColumn = findColumnByKeywords(textColumns, ["customer", "client", "user"]);
-    const productColumn = findColumnByKeywords(textColumns, ["product", "item", "service", "goods"]);
+    const customerColumn = findColumnByKeywords(textColumns, ["customer", "client", "user", "name"]);
+    // We'll keep this for potential future use
+    const productColumn = findColumnByKeywords(textColumns, ["product", "item", "service", "goods", "dish", "menu"]);
+    const hubColumn = findColumnByKeywords(textColumns, ["hub", "branch", "location", "store"]);
+    const deliveredColumn = findColumnByKeywords(numericColumns, ["delivered", "delivery", "fulfilled"]);
+    const rejectedColumn = findColumnByKeywords(numericColumns, ["rejected", "cancelled", "returned"]);
+    const discountColumn = findColumnByKeywords(numericColumns, ["discount", "promo", "coupon"]);
+    const commissionColumn = findColumnByKeywords(numericColumns, ["commission", "fee", "charge"]);
     
-    if (revenueColumn && customerColumn) {
-      suggestions.push(`Show top customers by ${revenueColumn}`);
+    // Restaurant/Sales data specific suggestions
+    if (customerColumn) {
+      if (revenueColumn) {
+        suggestions.push(`Show top ${customerColumn}s by ${revenueColumn}`);
+      }
+      
+      if (deliveredColumn && rejectedColumn) {
+        suggestions.push(`Compare ${deliveredColumn} vs ${rejectedColumn} by ${customerColumn}`);
+      }
     }
 
-    if (revenueColumn && productColumn) {
-      suggestions.push(`Show best selling ${productColumn} by ${revenueColumn}`);
+    if (revenueColumn) {
+      if (hubColumn) {
+        suggestions.push(`Compare ${revenueColumn} across different ${hubColumn}s`);
+      }
+      
+      if (discountColumn) {
+        suggestions.push(`Analyze impact of ${discountColumn}s on ${revenueColumn}`);
+      }
+      
+      suggestions.push(`Show top performers by ${revenueColumn}`);
     }
 
-    if (revenueColumn && dateColumns.length > 0) {
-      suggestions.push(`Detect outliers in ${revenueColumn}`);
+    if (deliveredColumn && hubColumn) {
+      suggestions.push(`Analyze delivery performance by ${hubColumn}`);
+    }
+    
+    if (commissionColumn && revenueColumn) {
+      suggestions.push(`Show relationship between ${commissionColumn} and ${revenueColumn}`);
+    }
+    
+    // Use product column if available
+    if (productColumn) {
+      suggestions.push(`Analyze performance of different ${productColumn} types`);
     }
     
     // Always add some general analysis suggestions if we have too few
@@ -302,7 +363,7 @@ How can I help you analyze this data? You can ask me to:
     }
     
     return suggestions.slice(0, 5); // Limit to 5 suggestions
-  }, [findColumnByKeywords]);
+  }, [findColumnByKeywords, isNumericString]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -374,7 +435,7 @@ How can I help you analyze this data? You can ask me to:
           {/* Top section with file info and chat */}
           <div className="grid md:grid-cols-[300px_1fr] gap-6">
             {/* File Information Card */}
-            <Card className="h-[600px] overflow-hidden">
+            <Card className="h-[700px] overflow-hidden">
               <CardHeader className="p-4">
                 <CardTitle className="text-lg">File Information</CardTitle>
               </CardHeader>
@@ -478,7 +539,7 @@ How can I help you analyze this data? You can ask me to:
             </Card>
             
             {/* Chat with AI Card */}
-            <Card className="h-[600px] flex flex-col">
+            <Card className="h-[900px] flex flex-col">
               <CardHeader className="p-4 border-b">
                 <CardTitle>Chat with AI Assistant</CardTitle>
                 <CardDescription>
@@ -489,7 +550,7 @@ How can I help you analyze this data? You can ask me to:
               <CardContent className="flex-1 overflow-y-auto p-4" ref={messagesContainerRef}>
                 <div className="space-y-4">
                   {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-[300px] text-center">
+                    <div className="flex flex-col items-center justify-center h-[400px] text-center">
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="48"
@@ -604,7 +665,7 @@ How can I help you analyze this data? You can ask me to:
                 >
                   <Textarea
                     placeholder="Ask a question about your data..."
-                    className="min-h-[44px] flex-1 resize-none"
+                    className="min-h-[50px] flex-1 resize-none"
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     onKeyDown={(e) => {
@@ -660,7 +721,7 @@ How can I help you analyze this data? You can ask me to:
           </div>
           
           {/* Visualization Section - Separated from Chat Interface */}
-          <Card className="min-h-[400px] overflow-hidden">
+          <Card className="min-h-[450px] overflow-hidden">
             <CardHeader className="p-4 border-b">
               <CardTitle className="text-lg">Data Visualizations</CardTitle>
               <CardDescription>
