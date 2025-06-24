@@ -41,7 +41,7 @@ export default function Home() {
                   <div>
                     <h3 className="font-medium">API Endpoints:</h3>
                     <ul className="list-disc pl-5 mt-2">
-                      <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">/upload/excel/</code> - Upload Excel files</li>
+                      <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">/upload/file/</code> - Upload Excel files</li>
                       <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">/chat/</code> - Chat with AI about data</li>
                       <li><code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">/conversations/{"{file_id}"}</code> - Get conversation history</li>
                     </ul>

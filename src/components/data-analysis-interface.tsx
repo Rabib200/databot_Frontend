@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,12 +125,13 @@ How can I help you analyze this data? You can ask me to:
   };
 
   // Function to send message
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !activeFileId) return;
+  const sendMessage = async (messageText?: string) => {
+    const messageContent = messageText || newMessage;
+    if (!messageContent.trim() || !activeFileId) return;
     
     const userMessage = {
       role: "user" as const,
-      content: newMessage,
+      content: messageContent,
       timestamp: new Date().toISOString()
     };
     
@@ -201,10 +202,120 @@ How can I help you analyze this data? You can ask me to:
       .trim();
   };
 
+  // State for dynamic insights suggestions
+  const [suggestedInsights, setSuggestedInsights] = useState<string[]>([
+    "Generate data visualizations",
+    "Analyze patterns in data",
+    "Show summary statistics",
+    "Detect outliers or anomalies",
+    "Compare key metrics"
+  ]);
+  
+  // Function to handle clicking on a suggested insight
+  const handleInsightClick = (insight: string) => {
+    setNewMessage(insight);
+    // Automatically send the message
+    sendMessage(insight);
+  };
+
+  // Helper function to find columns by keywords
+  const findColumnByKeywords = useCallback((columns: string[], keywords: string[]): string | undefined => {
+    return columns.find(col => 
+      keywords.some(keyword => col.toLowerCase().includes(keyword.toLowerCase()))
+    );
+  }, []);
+
+  // Function to generate dynamic suggestions based on file data
+  const generateSuggestions = useCallback((data: FileData): string[] => {
+    const suggestions: string[] = [];
+    
+    // Get columns by type
+    const numericColumns: string[] = [];
+    const dateColumns: string[] = [];
+    const textColumns: string[] = [];
+    const locationColumns: string[] = [];
+    
+    Object.entries(data.summary.data_types).forEach(([column, type]) => {
+      if (type.includes("int") || type.includes("float") || type.includes("number") || type.includes("double")) {
+        numericColumns.push(column);
+      } else if (type.includes("date") || type.includes("time")) {
+        dateColumns.push(column);
+      } else {
+        textColumns.push(column);
+      }
+
+      // Check for location/area related columns
+      if (column.toLowerCase().includes("area") || 
+          column.toLowerCase().includes("location") || 
+          column.toLowerCase().includes("region") || 
+          column.toLowerCase().includes("city") || 
+          column.toLowerCase().includes("country")) {
+        locationColumns.push(column);
+      }
+    });
+    
+    // Generate suggestions based on column types
+    if (numericColumns.length > 0) {
+      // Add numeric analysis suggestions
+      suggestions.push(`Show top 5 items by ${numericColumns[0]}`);
+      suggestions.push(`Analyze distribution of ${numericColumns[0]}`);
+    }
+    
+    if (dateColumns.length > 0 && numericColumns.length > 0) {
+      // Add time-based suggestions with numeric analysis
+      suggestions.push(`Show ${numericColumns[0]} trends over ${dateColumns[0]}`);
+    } else if (dateColumns.length > 0) {
+      suggestions.push(`Analyze patterns in ${dateColumns[0]}`);
+    }
+    
+    if (textColumns.length > 0 && numericColumns.length > 0) {
+      // Add categorical analysis suggestions
+      suggestions.push(`Compare ${numericColumns[0]} by ${textColumns[0]}`);
+    }
+    
+    if (locationColumns.length > 0 && numericColumns.length > 0) {
+      suggestions.push(`View ${numericColumns[0]} by ${locationColumns[0]}`);
+    }
+    
+    // Look for specific column names
+    const revenueColumn = findColumnByKeywords(numericColumns, ["revenue", "sales", "price", "amount", "total"]);
+    const customerColumn = findColumnByKeywords(textColumns, ["customer", "client", "user"]);
+    const productColumn = findColumnByKeywords(textColumns, ["product", "item", "service", "goods"]);
+    
+    if (revenueColumn && customerColumn) {
+      suggestions.push(`Show top customers by ${revenueColumn}`);
+    }
+
+    if (revenueColumn && productColumn) {
+      suggestions.push(`Show best selling ${productColumn} by ${revenueColumn}`);
+    }
+
+    if (revenueColumn && dateColumns.length > 0) {
+      suggestions.push(`Detect outliers in ${revenueColumn}`);
+    }
+    
+    // Always add some general analysis suggestions if we have too few
+    if (suggestions.length < 3) {
+      suggestions.push("Detect patterns or anomalies");
+      suggestions.push("Generate summary statistics");
+      suggestions.push("Visualize key relationships");
+    }
+    
+    return suggestions.slice(0, 5); // Limit to 5 suggestions
+  }, [findColumnByKeywords]);
+
   // Auto-scroll to bottom when messages change
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Update suggestions when file data changes
+  useEffect(() => {
+    if (fileData) {
+      const dynamicSuggestions = generateSuggestions(fileData);
+      setSuggestedInsights(dynamicSuggestions);
+    }
+  }, [fileData, generateSuggestions]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -377,7 +488,41 @@ How can I help you analyze this data? You can ask me to:
               
               <CardContent className="flex-1 overflow-y-auto p-4" ref={messagesContainerRef}>
                 <div className="space-y-4">
-                  {messages.map((message, index) => (
+                  {messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-[300px] text-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="text-gray-300 mb-4"
+                      >
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                      </svg>
+                      <p className="text-sm text-gray-500 mb-2">Ready to analyze your data</p>
+                      <p className="text-xs text-gray-400 mb-4">
+                        Try asking questions or click on a suggested insight below
+                      </p>
+                      <div className="flex flex-wrap gap-2 justify-center">
+                        {suggestedInsights.slice(0, 3).map((insight, index) => (
+                          <Badge 
+                            key={index}
+                            variant="outline" 
+                            className="cursor-pointer hover:bg-accent transition-colors py-1.5 px-3"
+                            onClick={() => handleInsightClick(insight)}
+                          >
+                            {insight}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    messages.map((message, index) => (
                     <div
                       key={index}
                       className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -407,7 +552,7 @@ How can I help you analyze this data? You can ask me to:
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )))}
                   
                   {isSending && (
                     <div className="flex justify-start">
@@ -432,7 +577,24 @@ How can I help you analyze this data? You can ask me to:
                 </div>
               </CardContent>
               
-              <CardFooter className="p-4 border-t mt-auto">
+              <CardFooter className="flex-col space-y-4 p-4 border-t mt-auto">
+                {/* Auto Insights Section */}
+                <div className="w-full">
+                  <p className="text-xs text-muted-foreground mb-2">Suggested Insights:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedInsights.map((insight, index) => (
+                      <Badge 
+                        key={index}
+                        variant="outline" 
+                        className="cursor-pointer hover:bg-accent transition-colors py-1.5 px-3"
+                        onClick={() => handleInsightClick(insight)}
+                      >
+                        {insight}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                
                 <form
                   className="flex w-full gap-2"
                   onSubmit={(e) => {
