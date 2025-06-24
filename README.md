@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Data Analysis System - Frontend
+
+A Next.js application that connects to a FastAPI backend to analyze Excel/CSV data using Azure OpenAI.
+
+## Features
+
+- Modern UI with Shadcn components
+- Upload Excel files for analysis
+- Chat with an AI assistant about your data
+- View data previews and summaries
+- Real-time conversation with context memory
+
+## Tech Stack
+
+- **Frontend**:
+  - Next.js 15
+  - TypeScript
+  - Tailwind CSS
+  - Shadcn UI
+  - Sonner toast notifications
+
+- **Backend** (connects to):
+  - FastAPI
+  - Azure OpenAI
+  - Pandas for data processing
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+ and Yarn
+- FastAPI backend running (see backend setup below)
+
+### Installation
+
+1. Install dependencies:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+yarn install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Start the development server:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+yarn dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+## Backend Setup
 
-To learn more about Next.js, take a look at the following resources:
+Make sure the FastAPI backend is running. The backend should be set up with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. FastAPI server running on `http://localhost:8000`
+2. Azure OpenAI configured with appropriate API keys
+3. Three main endpoints implemented:
+   - `/upload/excel/` - Upload and process Excel files
+   - `/chat/` - Interact with Azure OpenAI about the data
+   - `/conversations/{file_id}` - Retrieve conversation history
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can test the API connection using the API Test tab in the application.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/
+│   ├── layout.tsx  # Main layout with toaster
+│   └── page.tsx    # Main page with tabs
+├── components/
+│   ├── data-analysis-interface.tsx  # Main data analysis UI
+│   ├── api-test.tsx                # API connection test component
+│   └── ui/                         # Shadcn UI components
+├── services/
+│   └── api.ts      # API service functions
+└── lib/
+    └── utils.ts    # Utility functions
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage
+
+1. Go to the Data Analysis tab
+2. Upload an Excel file (.xlsx or .xls)
+3. Wait for the file to be processed
+4. Ask questions about your data in the chat
+5. Receive AI-powered analysis and insights
+
+## Development
+
+- Use the API Test tab to verify backend connectivity
+- Check for TypeScript errors with `yarn type-check`
+- Format code with `yarn format`
+
+## Environment Variables
+
+Configure API endpoints in `src/services/api.ts` to match your backend setup.
