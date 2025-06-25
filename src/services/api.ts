@@ -1,6 +1,6 @@
 // API service to handle interactions with the backend
 
-const API_BASE_URL = "http://52.230.98.48";
+const API_BASE_URL = "https://api.rabib200.com";
 
 export interface UploadResponse {
   file_id: string;
