@@ -50,7 +50,7 @@ export function DataAnalysisInterface() {
   // State for typing effect
   const [typingText, setTypingText] = useState<string>("");
   const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [fullResponse, setFullResponse] = useState<string>("");
+  // const [fullResponse, setFullResponse] = useState<string>("");
 
   // Reference for the messages container
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -406,7 +406,7 @@ How can I help you analyze this data? You can ask me to:
   const simulateTyping = useCallback((text: string, callback?: () => void) => {
     setIsTyping(true);
     setTypingText("");
-    setFullResponse(text);
+    // setFullResponse(text);
     
     let index = 0;
     // Adaptive typing speed based on text length - faster for longer texts
