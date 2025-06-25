@@ -120,3 +120,38 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@keyframes typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+.animate-blink {
+  animation: blink 0.8s infinite;
+}
+
+.animate-typing {
+  overflow: hidden;
+  white-space: normal;
+  animation: typing 3.5s steps(40, end);
+}
+
+.typing-container {
+  display: inline-block;
+  position: relative;
+}
+
+.typing-text {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion) {
+  .animate-typing, .animate-blink {
+    animation: none;
+  }
+}

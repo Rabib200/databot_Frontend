@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 
 export function ApiTestComponent() {
-  const [apiUrl, setApiUrl] = useState('http://0.0.0.0:8000');
+  const [apiUrl, setApiUrl] = useState('http://52.230.98.48');
   const [status, setStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 

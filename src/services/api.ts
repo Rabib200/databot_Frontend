@@ -1,6 +1,6 @@
 // API service to handle interactions with the backend
 
-const API_BASE_URL = "http://0.0.0.0:8000"; // Replace with your actual API URL
+const API_BASE_URL = "http://52.230.98.48";
 
 export interface UploadResponse {
   file_id: string;

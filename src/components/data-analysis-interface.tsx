@@ -22,6 +22,7 @@ interface Message {
   formattedContent?: string; // Optional formatted content with charts removed
   timestamp: string;
   charts?: ChartData[];
+  isTyping?: boolean; // Flag to indicate if this message is currently being typed
 }
 
 interface FileData {
@@ -46,15 +47,34 @@ export function DataAnalysisInterface() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [visualizationCharts, setVisualizationCharts] = useState<ChartData[]>([]);
 
+  // State for typing effect
+  const [typingText, setTypingText] = useState<string>("");
+  const [isTyping, setIsTyping] = useState<boolean>(false);
+  const [fullResponse, setFullResponse] = useState<string>("");
+
   // Reference for the messages container
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Function to scroll to the bottom of the messages
-  const scrollToBottom = () => {
+  // Enhanced function to scroll to the bottom of the messages with smooth animation
+  const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      const container = messagesContainerRef.current;
+      const scrollHeight = container.scrollHeight;
+      const currentScroll = container.scrollTop + container.clientHeight;
+      
+      // If we're already close to the bottom, use smooth scroll
+      // Otherwise, jump to bottom instantly (user might have scrolled up deliberately)
+      if (scrollHeight - currentScroll < 200) {
+        container.scrollTo({
+          top: scrollHeight,
+          behavior: 'smooth'
+        });
+      } else if (isTyping) {
+        // Force scroll to bottom during typing regardless of position
+        container.scrollTop = scrollHeight;
+      }
     }
-  };
+  }, [messagesContainerRef, isTyping]);
 
   // Function to handle file upload
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,17 +175,34 @@ How can I help you analyze this data? You can ask me to:
       // Format the response to remove chart JSON and enhance readability
       const formattedContent = formatAIResponse(data.analysis);
       
-      // Add assistant response with any chart data and formatted content
-      setMessages(prev => [
-        ...prev, 
-        {
-          role: "assistant",
-          content: data.analysis, // Keep original content
-          formattedContent: formattedContent, // Add formatted content
-          timestamp: new Date().toISOString(),
-          charts: charts.length > 0 ? charts : undefined
-        }
-      ]);
+      // Add a temporary placeholder message
+      const timestamp = new Date().toISOString();
+      const newMessage: Message = {
+        role: "assistant",
+        content: "", // Start with empty content that will be filled gradually
+        formattedContent: "", // Will be gradually filled
+        timestamp: timestamp,
+        isTyping: true, // Flag to indicate this message is being typed
+        charts: charts.length > 0 ? charts : undefined
+      };
+      
+      // Add the placeholder message
+      setMessages(prev => [...prev, newMessage]);
+      
+      // Start the typing effect
+      simulateTyping(formattedContent, () => {
+        // When typing is complete, update the message with the full content
+        setMessages(prev => prev.map(msg => 
+          msg.timestamp === timestamp 
+            ? {
+                ...msg,
+                content: data.analysis, // Complete original content
+                formattedContent: formattedContent, // Complete formatted content
+                isTyping: false
+              } 
+            : msg
+        ));
+      });
       
     } catch (error) {
       console.error("Error sending message:", error);
@@ -365,10 +402,102 @@ How can I help you analyze this data? You can ask me to:
     return suggestions.slice(0, 5); // Limit to 5 suggestions
   }, [findColumnByKeywords, isNumericString]);
 
-  // Auto-scroll to bottom when messages change
+  // Function to simulate typing effect with smooth scrolling
+  const simulateTyping = useCallback((text: string, callback?: () => void) => {
+    setIsTyping(true);
+    setTypingText("");
+    setFullResponse(text);
+    
+    let index = 0;
+    // Adaptive typing speed based on text length - faster for longer texts
+    const baseInterval = 1; // Base speed in milliseconds
+    const typingInterval = text.length > 1000 ? baseInterval / 2 : baseInterval; // Ultra-fast for long responses
+    
+    const typeNextCharacter = () => {
+      if (index < text.length) {
+        // Type multiple characters at once for faster typing - adaptive chunk sizing
+        let chunkSize;
+        if (text.length > 2000) {
+          chunkSize = 10; // Very large chunks for very long responses
+        } else if (text.length > 1000) {
+          chunkSize = 8; // Large chunks for long responses
+        } else if (text.length > 500) {
+          chunkSize = 5; // Medium chunks for medium responses
+        } else {
+          chunkSize = 3; // Small chunks for short responses
+        }
+        const endIndex = Math.min(index + chunkSize, text.length);
+        const chunk = text.substring(index, endIndex);
+        
+        setTypingText(prevText => prevText + chunk);
+        index = endIndex;
+        
+        // Minimal pauses for faster experience
+        const nextInterval = text.charAt(index - 1) === '.' || 
+                            text.charAt(index - 1) === '?' || 
+                            text.charAt(index - 1) === '!' ? 
+                            typingInterval * 2 : // Even shorter pauses at punctuation
+                            typingInterval;
+        
+        // Ensure auto-scroll during typing
+        requestAnimationFrame(scrollToBottom);
+        
+        setTimeout(typeNextCharacter, nextInterval);
+      } else {
+        setIsTyping(false);
+        if (callback) callback();
+        // Final scroll to ensure we're at the bottom
+        setTimeout(scrollToBottom, 50);
+      }
+    };
+    
+    setTimeout(typeNextCharacter, typingInterval);
+  }, [scrollToBottom]);
+
+  // Enhanced auto-scroll behavior with different strategies for different situations
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Check if we're typing - if so, ensure scroll to bottom happens on every character
+    if (isTyping && typingText) {
+      requestAnimationFrame(scrollToBottom);
+    } 
+    // When messages change (new message or finished typing), also scroll
+    else if (messages.length > 0) {
+      // Small delay to ensure content is rendered before scrolling
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [messages, typingText, isTyping, scrollToBottom]);
+  
+  // Separate effect to handle scroll position observation
+  useEffect(() => {
+    // Create an IntersectionObserver to detect when we're at the bottom
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // When the indicator is visible, we're at the bottom
+        const isAtBottom = entries[0]?.isIntersecting;
+        // Only auto-scroll if we're already at the bottom or actively typing
+        if (isAtBottom || isTyping) {
+          requestAnimationFrame(scrollToBottom);
+        }
+      },
+      { threshold: 0.5 }
+    );
+    
+    // Create a scroll indicator element
+    const scrollIndicator = document.createElement('div');
+    scrollIndicator.style.height = '1px';
+    scrollIndicator.style.width = '100%';
+    
+    // Add it to the container
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.appendChild(scrollIndicator);
+      observer.observe(scrollIndicator);
+    }
+    
+    return () => {
+      observer.disconnect();
+      scrollIndicator.remove();
+    };
+  }, [isTyping, scrollToBottom]);
 
   // Update suggestions when file data changes
   useEffect(() => {
@@ -604,9 +733,16 @@ How can I help you analyze this data? You can ask me to:
                           </div>
                         )}
                         <div className="whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
-                          <ReactMarkdown>
-                            {message.role === "assistant" && message.formattedContent ? message.formattedContent : message.content}
-                          </ReactMarkdown>
+                          {message.isTyping ? (
+                            <div className="typing-container relative">
+                              <span className="typing-text">{typingText}</span>
+                              <span className="inline-block w-1.5 h-4 ml-0.5 bg-gray-400 animate-blink absolute"></span>
+                            </div>
+                          ) : (
+                            <ReactMarkdown>
+                              {message.role === "assistant" && message.formattedContent ? message.formattedContent : message.content}
+                            </ReactMarkdown>
+                          )}
                         </div>
                         <div className="text-xs opacity-70 mt-1 text-right">
                           {new Date(message.timestamp).toLocaleTimeString()}
